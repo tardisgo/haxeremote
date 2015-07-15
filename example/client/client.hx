@@ -10,5 +10,7 @@ class Client {
     cnx.Server.bar.call(["ding希腊危机bat","doo欧元区dah"], function(data) { trace('Result: $data'); } );
     cnx.Server.fad.call([1111.1111,2222.2222], function(data) { trace('Result: $data'); } );
     cnx.Server.dong.call([1111.1111,2222.2222], function(data) { trace('Result: $data'); } );
+    cnx.Server.dingbat.call([haxe.io.Bytes.alloc(42)], 
+        function(data) { trace('Result: $data'); });
   }
 }

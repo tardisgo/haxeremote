@@ -1,6 +1,7 @@
 package haxeremote
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -41,7 +42,7 @@ func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	p, e := ioutil.ReadAll(req.Body)
-	//fmt.Printf("Request: %#v\nBody: %s, err=%v\n", *req, p, e)
+	fmt.Printf("Request: %#v\nBody: %s, err=%v\n", *req, p, e)
 	if e != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		log.Panic(e)
@@ -57,14 +58,14 @@ func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
 		log.Panic("__x= not found")
 		return
 	}
-	pp, err := url.QueryUnescape(string(p[4:]))
-	//fmt.Printf("URL decode Body: %s, err=%v\n", pp, err)
+	une, err := url.QueryUnescape(string(p[4:]))
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		log.Panic(err)
 		return
 	}
-	buf := []byte(pp)
+	buf := []byte(une)
+	fmt.Printf("URL unescaped = %s\n", string(buf))
 	var targetA interface{}
 	target := ""
 	targetA, buf, err = Unserialize(buf)
@@ -74,11 +75,10 @@ func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
 		}
 		target += t.(string)
 	}
-	//fmt.Printf("Unserialized Target decoded=%s, remaining=%s, error=%v\n", target, buf, err)
-
+	fmt.Printf("Unserialized Target decoded=%s, remaining=%s, error=%v\n", target, buf, err)
 	var args interface{}
 	args, buf, err = Unserialize(buf)
-	//fmt.Printf("Unserialized Args decoded=%v, remaining=%s, error=%v\n", args, buf, err)
+	fmt.Printf("Unserialized Args decoded=%v, remaining=%s, error=%v\n", args, buf, err)
 
 	results, err := callHaxeRemoteFunc(target, args)
 	if err != nil {
@@ -88,7 +88,7 @@ func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 	reply := "hxr" + Serialize(results)
 	fmt.Fprintln(rw, reply)
-	//fmt.Println("DEBUG reply: " + reply)
+	fmt.Println("DEBUG reply: " + reply)
 }
 
 /* Haxe serialization prefixes :
@@ -193,7 +193,13 @@ func Unserialize(buf []byte) (data interface{}, remains []byte, err error) {
 				length, err := strconv.Atoi(strInt)
 				//fmt.Printf("DEBUG string len: %s, %d, %v\n", strInt, length, err)
 				if err == nil {
-					data = string(remains[:length])
+					raw := string(remains[:length])
+					clean, err := url.QueryUnescape(raw)
+					if err == nil {
+						data = clean
+					} else {
+						data = raw
+					}
 					remains = remains[length:]
 					//fmt.Printf("DEBUG string decoded, remaining: %s, %s\n", data, remains)
 				}
@@ -230,6 +236,26 @@ func Unserialize(buf []byte) (data interface{}, remains []byte, err error) {
 		data = math.Inf(-1)
 	case 'z': // TODO should zero be floating point?
 		data = 0
+
+	case 's': // haxe.io.Bytes
+		for i, j := range remains {
+			switch j {
+			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+				// NoOp
+			case ':':
+				strInt := string(remains[:i])
+				remains = remains[i+1:]
+				length, err := strconv.Atoi(strInt)
+				if err == nil {
+					raw := string(remains[:length])
+					data, err = base64.StdEncoding.DecodeString(raw)
+					remains = remains[length:]
+				}
+				goto done
+			default:
+				err = errors.New("unrecognised string length: " + string(remains))
+			}
+		}
 
 		// TODO many more letters !
 
@@ -290,6 +316,10 @@ func Serialize(data interface{}) string {
 			ret += fmt.Sprintf("u%d", nilCount)
 		}
 		return ret + "h"
+
+	case []byte:
+		strForm := base64.StdEncoding.EncodeToString(data.([]byte))
+		return fmt.Sprintf("s%d:%s", len(strForm), strForm)
 
 	default:
 		panic(fmt.Sprintf("unhandled type to be serialized for Haxe %v : %T", data, data))
