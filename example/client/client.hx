@@ -1,7 +1,7 @@
 package;
 class Client {
   static function main() {
-    var cnx = haxe.remoting.HttpAsyncConnection.urlConnect("http://localhost:8088/haxeremote");
+    var cnx = haxe.remoting.HttpAsyncConnection.urlConnect("http://localhost:8088/_haxeRPC_");
     cnx.setErrorHandler( function(err) { trace('Error: $err'); } );
     cnx.Server.foo.call([1,2], function(data) { trace('Result: $data'); } );
     cnx.Server.foo.call([11,22], function(data) { trace('Result: $data'); } );

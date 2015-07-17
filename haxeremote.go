@@ -16,7 +16,7 @@ import (
 var haxeRemoteFuncs = map[string]func(interface{}) interface{}{}
 var haxeRemoteFuncsMutex sync.Mutex
 
-func AddHaxeRemoteFunc(name string, fn func(interface{}) interface{}) {
+func AddFunc(name string, fn func(interface{}) interface{}) {
 	haxeRemoteFuncsMutex.Lock()
 	haxeRemoteFuncs[name] = fn
 	haxeRemoteFuncsMutex.Unlock()
@@ -32,7 +32,7 @@ func callHaxeRemoteFunc(name string, arg interface{}) (interface{}, error) {
 	return fn(arg), nil
 }
 
-func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
+func HttpHandler(rw http.ResponseWriter, req *http.Request) {
 	// TODO add further validaton of the request as from a valid Haxe user here?
 
 	if req.Header.Get("X-Haxe-Remoting") != "1" {
@@ -42,7 +42,7 @@ func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	p, e := ioutil.ReadAll(req.Body)
-	fmt.Printf("Request: %#v\nBody: %s, err=%v\n", *req, p, e)
+	//fmt.Printf("DEBUG Request: %#v\nBody: %s, err=%v\n", *req, p, e)
 	if e != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		log.Panic(e)
@@ -65,7 +65,7 @@ func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	buf := []byte(une)
-	fmt.Printf("URL unescaped = %s\n", string(buf))
+	//fmt.Printf("DEBUG URL unescaped = %s\n", string(buf))
 	var targetA interface{}
 	target := ""
 	targetA, buf, err = Unserialize(buf)
@@ -75,10 +75,10 @@ func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
 		}
 		target += t.(string)
 	}
-	fmt.Printf("Unserialized Target decoded=%s, remaining=%s, error=%v\n", target, buf, err)
+	//fmt.Printf("DEBUG Unserialized Target decoded=%s, remaining=%s, error=%v\n", target, buf, err)
 	var args interface{}
 	args, buf, err = Unserialize(buf)
-	fmt.Printf("Unserialized Args decoded=%v, remaining=%s, error=%v\n", args, buf, err)
+	//fmt.Printf("DEBUG Unserialized Args decoded=%v, remaining=%s, error=%v\n", args, buf, err)
 
 	results, err := callHaxeRemoteFunc(target, args)
 	if err != nil {
@@ -88,7 +88,7 @@ func HaxeRemoteHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 	reply := "hxr" + Serialize(results)
 	fmt.Fprintln(rw, reply)
-	fmt.Println("DEBUG reply: " + reply)
+	//fmt.Println("DEBUG reply: " + reply)
 }
 
 /* Haxe serialization prefixes :
@@ -190,7 +190,8 @@ func Unserialize(buf []byte) (data interface{}, remains []byte, err error) {
 			case ':':
 				strInt := string(remains[:i])
 				remains = remains[i+1:]
-				length, err := strconv.Atoi(strInt)
+				var length int
+				length, err = strconv.Atoi(strInt)
 				//fmt.Printf("DEBUG string len: %s, %d, %v\n", strInt, length, err)
 				if err == nil {
 					raw := string(remains[:length])
@@ -245,10 +246,13 @@ func Unserialize(buf []byte) (data interface{}, remains []byte, err error) {
 			case ':':
 				strInt := string(remains[:i])
 				remains = remains[i+1:]
-				length, err := strconv.Atoi(strInt)
+				var length int
+				length, err = strconv.Atoi(strInt)
 				if err == nil {
 					raw := string(remains[:length])
+					//println("DEBUG raw=" + raw)
 					data, err = base64.StdEncoding.DecodeString(raw)
+					//fmt.Printf("DEBUG data %v:%T err=%v\n", data, data, err)
 					remains = remains[length:]
 				}
 				goto done
@@ -261,7 +265,6 @@ func Unserialize(buf []byte) (data interface{}, remains []byte, err error) {
 
 	default:
 		err = errors.New("unhandled Haxe serialization code: " + string(code))
-
 	}
 done:
 	return
@@ -272,7 +275,7 @@ func Serialize(data interface{}) string {
 		return "n"
 	}
 	switch data.(type) {
-	case int:
+	case int: // TODO special processing for 0=>z ?
 		return fmt.Sprintf("i%d", data.(int))
 
 	case string:
@@ -285,7 +288,7 @@ func Serialize(data interface{}) string {
 		}
 		return "f"
 
-	case float64:
+	case float64: // TODO special processing for 0=>z ?
 		val := data.(float64)
 		if math.IsInf(val, -1) {
 			return "m"

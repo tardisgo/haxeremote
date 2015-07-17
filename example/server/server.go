@@ -8,28 +8,28 @@ import (
 )
 
 func main() {
-	haxeremote.AddHaxeRemoteFunc("Server.foo", func(data interface{}) interface{} {
+	haxeremote.AddFunc("Server.foo", func(data interface{}) interface{} {
 		return data.([]interface{})[0].(int) + data.([]interface{})[1].(int)
 	})
-	haxeremote.AddHaxeRemoteFunc("Server.bar", func(data interface{}) interface{} {
+	haxeremote.AddFunc("Server.bar", func(data interface{}) interface{} {
 		return data.([]interface{})[0].(string) + " " + data.([]interface{})[1].(string)
 	})
-	haxeremote.AddHaxeRemoteFunc("Server.fad", func(data interface{}) interface{} {
+	haxeremote.AddFunc("Server.fad", func(data interface{}) interface{} {
 		return data.([]interface{})[0].(float64) + data.([]interface{})[1].(float64)
 	})
-	haxeremote.AddHaxeRemoteFunc("Server.dong", func(data interface{}) interface{} {
+	haxeremote.AddFunc("Server.dong", func(data interface{}) interface{} {
 		return []interface{}{
 			data.([]interface{})[1].(float64), data.([]interface{})[0].(float64)}
 	})
-	haxeremote.AddHaxeRemoteFunc("Server.dingbat", func(data interface{}) interface{} {
+	haxeremote.AddFunc("Server.dingbat", func(data interface{}) interface{} {
 		item := data.([]interface{})[0].([]byte)
-		println("Length of []byte ", len(item))
+		//println("Length of []byte ", len(item))
 		for i := range item {
 			item[i] = 'A' + byte(i)
 		}
 		return item
 	})
-	http.HandleFunc("/haxeremote", haxeremote.HaxeRemoteHandler)
+	http.HandleFunc("/_haxeRPC_", haxeremote.HttpHandler)
 	http.Handle("/client/", http.StripPrefix("/client/", http.FileServer(http.Dir("../client"))))
 
 	println("Haxe remote webserver running on port 8088")
