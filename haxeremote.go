@@ -88,7 +88,7 @@ func HttpHandler(rw http.ResponseWriter, req *http.Request) {
 	}
 	reply := "hxr" + Serialize(results)
 	fmt.Fprintln(rw, reply)
-	//fmt.Println("DEBUG reply: " + reply)
+	//fmt.Printf("DEBUG haxe http remote results: %v serialized-reply: %s\n", results, reply)
 }
 
 /* Haxe serialization prefixes :
