@@ -1,129 +1,48 @@
+// package haxeremote provides Serialization and Unserializtion of data in Haxe format.
+/* Haxe serialization prefixes :
+a : array 					- DONE
+b : hash
+c : class
+d : Float 					- DONE
+e : reserved (float exp) 	- DONE
+f : false 					- DONE
+g : object end
+h : array/list/hash end 	- DONE for array
+i : Int 					- DONE
+j : enum (by index)
+k : NaN 					- DONE
+l : list
+m : -Inf 					- DONE
+n : null 					- DONE
+o : object
+p : +Inf 					- DONE
+q : haxe.ds.IntMap
+r : reference
+s : bytes (base64) 			- DONE
+t : true					- DONE
+u : array nulls				- DONE
+v : date
+w : enum
+x : exception
+y : urlencoded string		- DONE
+z : zero					- DONE
+A : Class<Dynamic>
+B : Enum<Dynamic>
+M : haxe.ds.ObjectMap
+C : custom
+*/
 package haxeremote
 
 import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"math"
-	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 )
 
-var haxeRemoteFuncs = map[string]func(interface{}) interface{}{}
-var haxeRemoteFuncsMutex sync.Mutex
-
-func AddFunc(name string, fn func(interface{}) interface{}) {
-	haxeRemoteFuncsMutex.Lock()
-	haxeRemoteFuncs[name] = fn
-	haxeRemoteFuncsMutex.Unlock()
-}
-
-func callHaxeRemoteFunc(name string, arg interface{}) (interface{}, error) {
-	haxeRemoteFuncsMutex.Lock()
-	fn, ok := haxeRemoteFuncs[name]
-	haxeRemoteFuncsMutex.Unlock()
-	if !ok {
-		return nil, errors.New("could not find remote func " + name + " in CallHaxeRemoteFunc()")
-	}
-	return fn(arg), nil
-}
-
-func HttpHandler(rw http.ResponseWriter, req *http.Request) {
-	// TODO add further validaton of the request as from a valid Haxe user here?
-
-	if req.Header.Get("X-Haxe-Remoting") != "1" {
-		rw.WriteHeader(http.StatusBadRequest)
-		log.Panic("header does not contain X-Haxe-Remoting=1")
-		return
-	}
-
-	p, e := ioutil.ReadAll(req.Body)
-	//fmt.Printf("DEBUG Request: %#v\nBody: %s, err=%v\n", *req, p, e)
-	if e != nil {
-		rw.WriteHeader(http.StatusBadRequest)
-		log.Panic(e)
-		return
-	}
-	if len(p) < 4 {
-		rw.WriteHeader(http.StatusBadRequest)
-		log.Panic("no body")
-		return
-	}
-	if string(p[:4]) != "__x=" {
-		rw.WriteHeader(http.StatusBadRequest)
-		log.Panic("__x= not found")
-		return
-	}
-	une, err := url.QueryUnescape(string(p[4:]))
-	if err != nil {
-		rw.WriteHeader(http.StatusBadRequest)
-		log.Panic(err)
-		return
-	}
-	buf := []byte(une)
-	//fmt.Printf("DEBUG URL unescaped = %s\n", string(buf))
-	var targetA interface{}
-	target := ""
-	targetA, buf, err = Unserialize(buf)
-	for i, t := range targetA.([]interface{}) {
-		if i > 0 {
-			target += "."
-		}
-		target += t.(string)
-	}
-	//fmt.Printf("DEBUG Unserialized Target decoded=%s, remaining=%s, error=%v\n", target, buf, err)
-	var args interface{}
-	args, buf, err = Unserialize(buf)
-	//fmt.Printf("DEBUG Unserialized Args decoded=%v, remaining=%s, error=%v\n", args, buf, err)
-
-	results, err := callHaxeRemoteFunc(target, args)
-	if err != nil {
-		rw.WriteHeader(http.StatusBadRequest)
-		log.Panic(err)
-		return
-	}
-	reply := "hxr" + Serialize(results)
-	fmt.Fprintln(rw, reply)
-	//fmt.Printf("DEBUG haxe http remote results: %v serialized-reply: %s\n", results, reply)
-}
-
-/* Haxe serialization prefixes :
-a : array
-b : hash
-c : class
-d : Float
-e : reserved (float exp)
-f : false
-g : object end
-h : array/list/hash end
-i : Int
-j : enum (by index)
-k : NaN
-l : list
-m : -Inf
-n : null
-o : object
-p : +Inf
-q : haxe.ds.IntMap
-r : reference
-s : bytes (base64)
-t : true
-u : array nulls
-v : date
-w : enum
-x : exception
-y : urlencoded string
-z : zero
-A : Class<Dynamic>
-B : Enum<Dynamic>
-M : haxe.ds.ObjectMap
-C : custom
-*/
-
+// Unserialize the in the Haxe format from a given buffer.
 func Unserialize(buf []byte) (data interface{}, remains []byte, err error) {
 	//fmt.Println("DEBUG Unserialize:", string(buf))
 	if len(buf) == 0 {
@@ -181,6 +100,8 @@ func Unserialize(buf []byte) (data interface{}, remains []byte, err error) {
 				goto done
 			}
 		}
+		data, err = strconv.Atoi(string(remains))
+		remains = []byte{}
 
 	case 'y': // String
 		for i, j := range remains {
@@ -221,6 +142,8 @@ func Unserialize(buf []byte) (data interface{}, remains []byte, err error) {
 				goto done
 			}
 		}
+		data, err = strconv.ParseFloat(string(remains), 64)
+		remains = []byte{}
 
 		// the single letter values
 	case 'n':
@@ -270,12 +193,16 @@ done:
 	return
 }
 
+// Serialize the given data into a string in Haxe serialization format.
 func Serialize(data interface{}) string {
 	if data == nil {
 		return "n"
 	}
 	switch data.(type) {
-	case int: // TODO special processing for 0=>z ?
+	case int:
+		if data.(int) == 0 {
+			return "z"
+		}
 		return fmt.Sprintf("i%d", data.(int))
 
 	case string:
@@ -288,7 +215,7 @@ func Serialize(data interface{}) string {
 		}
 		return "f"
 
-	case float64: // TODO special processing for 0=>z ?
+	case float64: // NOTE no special processing of 0=>z for Float
 		val := data.(float64)
 		if math.IsInf(val, -1) {
 			return "m"
@@ -299,7 +226,7 @@ func Serialize(data interface{}) string {
 		if math.IsNaN(val) {
 			return "k"
 		}
-		return "d" + strconv.FormatFloat(val, 'e', -1, 64)
+		return "d" + strconv.FormatFloat(val, 'g', -1, 64)
 
 	case []interface{}:
 		ret := "a"

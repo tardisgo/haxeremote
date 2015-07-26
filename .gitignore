@@ -1,4 +1,6 @@
-/example/client/*.js
-/example/client/cpp/*
-/example/client/cs/*
-/example/client/java/*
+/examples/*/*/*.js
+/examples/*/*/cpp/*
+/examples/*/*/cpp/*
+/examples/*/*/cs/*
+/examples/*/*/java/*
+/examples/*/hx-cpp-server
